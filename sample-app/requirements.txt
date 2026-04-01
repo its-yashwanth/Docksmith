@@ -1,0 +1,4 @@
+# Offline sample app: no third-party dependencies are required.
+# This file is included to satisfy the project layout and to make
+# it explicit that the sample build/run path does not need network access.
+

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Docksmith</title>
+  <style>
+    :root {
+      --bg: #f4efe7;
+      --panel: rgba(255, 250, 242, 0.92);
+      --ink: #1d1a17;
+      --accent: #b24c2a;
+      --accent-dark: #7e2d17;
+      --line: rgba(29, 26, 23, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: Georgia, "Times New Roman", serif;
+      background:
+        radial-gradient(circle at top left, rgba(178, 76, 42, 0.18), transparent 32%),
+        radial-gradient(circle at bottom right, rgba(56, 96, 122, 0.18), transparent 30%),
+        linear-gradient(135deg, #efe4d4, #f9f4ec 50%, #e8ddd0);
+      display: grid;
+      place-items: center;
+      padding: 32px;
+    }
+
+    main {
+      width: min(920px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.08);
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(2.6rem, 6vw, 4.8rem);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+    }
+
+    p {
+      margin: 0 0 16px;
+      font-size: 1.05rem;
+      line-height: 1.7;
+      max-width: 65ch;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+      background: rgba(255, 255, 255, 0.64);
+    }
+
+    .label {
+      color: var(--accent-dark);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.8rem;
+      margin-bottom: 8px;
+    }
+
+    code {
+      font-family: "Courier New", monospace;
+      color: var(--accent-dark);
+      font-size: 0.95rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Docksmith</h1>
+    <p>
+      A simplified Docker-like build and runtime system built from scratch in Python,
+      with deterministic layer caching, content-addressed storage, and Linux-rooted isolation.
+    </p>
+    <div class="grid">
+      <section class="card">
+        <div class="label">Build</div>
+        <code>python -m docksmith.cli build -t myapp:latest sample-app</code>
+      </section>
+      <section class="card">
+        <div class="label">Run</div>
+        <code>python -m docksmith.cli run myapp:latest</code>
+      </section>
+      <section class="card">
+        <div class="label">Base Import</div>
+        <code>python scripts/import_base_image.py --name python-base --tag 3.11 --tar /path/to/rootfs.tar</code>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
+

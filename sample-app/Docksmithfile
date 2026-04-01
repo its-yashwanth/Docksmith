@@ -1,0 +1,7 @@
+FROM python-base:3.11
+WORKDIR /app
+ENV APP_MESSAGE=Hello from Docksmith
+COPY . /app
+RUN python3 -m py_compile /app/app.py
+CMD ["python3","/app/app.py"]
+
