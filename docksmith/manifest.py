@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -116,8 +116,22 @@ class ImageManifest:
             name=name,
             tag=tag,
             digest="",
-            created=created or datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+            created=created or deterministic_created_timestamp(
+                {
+                    "name": name,
+                    "tag": tag,
+                    "config": config.to_dict(),
+                    "layers": [layer.to_dict() for layer in layers],
+                }
+            ),
             config=config,
             layers=layers,
         )
 
+
+def deterministic_created_timestamp(payload: dict[str, Any]) -> str:
+    digest = canonical_json_digest(payload).split(":", 1)[1]
+    epoch = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    # Keep timestamps stable for identical inputs while still looking like real ISO-8601 times.
+    offset_seconds = int(digest[:12], 16) % (30 * 365 * 24 * 60 * 60)
+    return (epoch + timedelta(seconds=offset_seconds)).isoformat()

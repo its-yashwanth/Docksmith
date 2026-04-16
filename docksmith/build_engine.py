@@ -27,7 +27,7 @@ from .instruction import (
 )
 from .isolation import run_isolated
 from .layer_builder import build_layer_from_diff
-from .manifest import ImageConfig, ImageManifest, LayerEntry
+from .manifest import ImageConfig, ImageManifest, LayerEntry, deterministic_created_timestamp
 from .parser import parse_docksmithfile
 from .state import DocksmithState
 
@@ -156,22 +156,41 @@ class BuildEngine:
                 print(f"Step {index}/{total_steps} : {instruction.raw} [CACHE MISS] {duration:.2f}s")
 
             existing_manifest = self.image_store.load(image_ref) if self.image_store.exists(image_ref) else None
-            created = existing_manifest.created if existing_manifest is not None and all_layer_steps_hit else None
+            final_config = ImageConfig(
+                Env=[f"{key}={env[key]}" for key in sorted(env)],
+                Cmd=current_cmd,
+                WorkingDir=current_workdir,
+            )
+            final_layers = [*base_layers, *produced_layers]
+            created = None
+            if existing_manifest is not None and self._manifest_identity_matches(
+                existing_manifest=existing_manifest,
+                name=image_ref.name,
+                tag=image_ref.tag,
+                config=final_config,
+                layers=final_layers,
+            ):
+                created = existing_manifest.created
             if not layer_step_seen:
                 all_layer_steps_hit = existing_manifest is not None
                 if all_layer_steps_hit:
                     created = existing_manifest.created
+            if created is None:
+                created = deterministic_created_timestamp(
+                    {
+                        "name": image_ref.name,
+                        "tag": image_ref.tag,
+                        "config": final_config.to_dict(),
+                        "layers": [layer.to_dict() for layer in final_layers],
+                    }
+                )
 
             final_manifest = ImageManifest.new(
                 name=image_ref.name,
                 tag=image_ref.tag,
                 created=created,
-                config=ImageConfig(
-                    Env=[f"{key}={env[key]}" for key in sorted(env)],
-                    Cmd=current_cmd,
-                    WorkingDir=current_workdir,
-                ),
-                layers=[*base_layers, *produced_layers],
+                config=final_config,
+                layers=final_layers,
             )
             self.image_store.save(final_manifest)
             duration = time.perf_counter() - started_at
@@ -198,7 +217,13 @@ class BuildEngine:
         }
         if isinstance(instruction, CopyInstruction):
             sources = resolve_copy_sources(context_dir, instruction.src)
-            payload["copy_source_hashes"] = "".join(sha256_file(source) for source in sources)
+            payload["copy_sources"] = [
+                {
+                    "path": source.relative_to(context_dir).as_posix(),
+                    "digest": sha256_file(source),
+                }
+                for source in sources
+            ]
         return canonical_json_digest(payload)
 
     @staticmethod
@@ -216,3 +241,19 @@ class BuildEngine:
         if path.startswith("/"):
             return path
         return f"/{path}"
+
+    @staticmethod
+    def _manifest_identity_matches(
+        *,
+        existing_manifest: ImageManifest,
+        name: str,
+        tag: str,
+        config: ImageConfig,
+        layers: list[LayerEntry],
+    ) -> bool:
+        return (
+            existing_manifest.name == name
+            and existing_manifest.tag == tag
+            and existing_manifest.config.to_dict() == config.to_dict()
+            and [layer.to_dict() for layer in existing_manifest.layers] == [layer.to_dict() for layer in layers]
+        )

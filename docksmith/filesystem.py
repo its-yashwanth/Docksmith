@@ -6,6 +6,8 @@ import tarfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+WHITEOUT_PREFIX = ".wh."
+
 
 def container_path_to_host(rootfs: Path, container_path: str) -> Path:
     if not container_path.startswith("/"):
@@ -24,10 +26,28 @@ def extract_layer(layer_tar: Path, rootfs: Path) -> None:
     with tarfile.open(layer_tar, "r") as archive:
         root_resolved = rootfs.resolve()
         for member in archive.getmembers():
+            target_name = member.name
+            pure_target = PurePosixPath(target_name)
+            if pure_target.name.startswith(WHITEOUT_PREFIX):
+                target_name = str(
+                    pure_target.parent / pure_target.name[len(WHITEOUT_PREFIX) :]
+                )
             target = (rootfs / member.name).resolve()
+            if target_name != member.name:
+                target = (rootfs / target_name).resolve()
             if target != root_resolved and root_resolved not in target.parents:
                 raise ValueError(f"layer attempted to escape rootfs: {member.name}")
-        archive.extractall(rootfs)
+        for member in archive.getmembers():
+            pure_target = PurePosixPath(member.name)
+            if pure_target.name.startswith(WHITEOUT_PREFIX):
+                delete_name = pure_target.name[len(WHITEOUT_PREFIX) :]
+                delete_target = rootfs / pure_target.parent / delete_name
+                if delete_target.is_dir() and not delete_target.is_symlink():
+                    shutil.rmtree(delete_target, ignore_errors=True)
+                else:
+                    delete_target.unlink(missing_ok=True)
+                continue
+            archive.extract(member, rootfs)
 
 
 def extract_layers(layer_paths: list[Path], rootfs: Path) -> None:
@@ -99,16 +119,22 @@ def copy_into_rootfs(context_dir: Path, sources: list[Path], src_pattern: str, d
     destination_root = container_path_to_host(rootfs, destination)
     context_root = context_dir.resolve()
     source_has_glob = any(char in src_pattern for char in "*?[")
+    source_path = (context_root / src_pattern).resolve(strict=False)
 
-    if len(sources) == 1 and not source_has_glob and not dest.endswith("/"):
+    if len(sources) == 1 and not source_has_glob and sources[0].is_file() and not dest.endswith("/"):
         destination_root.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(sources[0], destination_root)
         return
 
     destination_root.mkdir(parents=True, exist_ok=True)
 
+    if len(sources) == 1 and not source_has_glob and source_path.is_dir():
+        relative_base = source_path
+    else:
+        relative_base = context_root
+
     for source in sources:
-        relative = source.relative_to(context_root)
+        relative = source.relative_to(relative_base)
         target = destination_root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)

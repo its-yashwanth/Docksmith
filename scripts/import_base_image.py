@@ -11,7 +11,12 @@ if str(REPO_ROOT) not in sys.path:
 
 from docksmith.hashing import sha256_file
 from docksmith.image_store import ImageStore
-from docksmith.manifest import ImageConfig, ImageManifest, LayerEntry
+from docksmith.manifest import (
+    ImageConfig,
+    ImageManifest,
+    LayerEntry,
+    deterministic_created_timestamp,
+)
 from docksmith.state import DocksmithState
 
 
@@ -44,6 +49,20 @@ def main() -> int:
     manifest = ImageManifest.new(
         name=args.name,
         tag=args.tag,
+        created=deterministic_created_timestamp(
+            {
+                "name": args.name,
+                "tag": args.tag,
+                "config": ImageConfig(Env=list(args.env), Cmd=list(args.cmd), WorkingDir=args.workdir).to_dict(),
+                "layers": [
+                    LayerEntry(
+                        digest=digest,
+                        size=tar_path.stat().st_size,
+                        createdBy="<imported base layer>",
+                    ).to_dict()
+                ],
+            }
+        ),
         config=ImageConfig(Env=list(args.env), Cmd=list(args.cmd), WorkingDir=args.workdir),
         layers=[LayerEntry(digest=digest, size=tar_path.stat().st_size, createdBy="<imported base layer>")],
     )
